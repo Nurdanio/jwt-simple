@@ -1,7 +1,14 @@
 import { Request, Response } from "express";
-import { hashSync } from "bcryptjs";
+import { hashSync, compareSync } from "bcryptjs";
 import { validationResult } from "express-validator";
+import jwt from "jsonwebtoken";
 import { User, Role } from "../model";
+
+const generateAccessToken = (id: unknown, roles: string[]) => {
+  const payload = { id, roles };
+
+  return jwt.sign(payload, "some-secret-key", { expiresIn: "15d" });
+};
 
 class AuthController {
   async registration(req: Request, res: Response) {
@@ -36,6 +43,22 @@ class AuthController {
   }
   async login(req: Request, res: Response) {
     try {
+      const { username, password } = req.body;
+
+      const user = await User.findOne({ username });
+      const validPassword = compareSync(password, user!.password);
+
+      if (!user) {
+        return res
+          .status(400)
+          .json({ message: `Пользователь ${username} не найден` });
+      }
+
+      if (!validPassword) {
+        return res.status(400).json({ message: `Введен неверный пароль` });
+      }
+
+      return res.json({ token: generateAccessToken(user._id, user.roles) });
     } catch (error) {
       console.log(error);
       res.status(400).json({ message: "Login Error" });
@@ -43,6 +66,7 @@ class AuthController {
   }
   async getUsers(req: Request, res: Response) {
     try {
+      return res.json({ users: await User.find() });
     } catch (error) {
       console.log(error);
     }
